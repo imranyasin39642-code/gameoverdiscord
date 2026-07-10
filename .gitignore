@@ -1,0 +1,13 @@
+# Ignore environment token configurations
+.env
+
+# Ignore SQLite database storage
+*.sqlite3
+
+# Ignore Node dependencies
+node_modules/
+
+# OS/System files
+.DS_Store
+__pycache__/
+*.pyc
