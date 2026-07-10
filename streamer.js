@@ -1,6 +1,9 @@
 import { File } from 'node:buffer';
 global.File = File;
 
+import WebSocket from 'ws';
+global.WebSocket = WebSocket;
+
 import { Client } from 'discord.js-selfbot-v13';
 import { Streamer, prepareStream, playStream } from '@dank074/discord-video-stream';
 import path from 'path';
