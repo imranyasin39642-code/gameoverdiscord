@@ -62,6 +62,10 @@ client.on('ready', async () => {
             process.exit(1);
         });
 
+        command.on('stderr', (line) => {
+            console.warn(`[FFmpeg Stderr] ${line}`);
+        });
+
         command.on('end', () => {
             console.log("[Streamer] Movie playback completed successfully. Exiting...");
             process.exit(0);
