@@ -10,14 +10,17 @@ echo "==================================================="
 
 cd /root/gameoverdiscord
 
-# 1. Ensure build tools are installed (needed to compile node-av from source)
+# 1. Ensure build tools and FFmpeg 7.x dev libraries are installed
 echo ""
-echo "[1/4] Installing build dependencies..."
-apt-get update -qq && apt-get install -y -qq build-essential python3 make g++ ffmpeg
+echo "[1/4] Installing build dependencies and FFmpeg 7.x dev libraries..."
+apt-get update -qq
+apt-get install -y -qq software-properties-common
+add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg7
+apt-get update -qq
+apt-get install -y -qq build-essential python3 make g++ ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswresample-dev libswscale-dev
 
 # 2. Rebuild all native Node.js addons (node-av, node-datachannel) from source.
-#    This fixes the "frame extraction error" crash caused by prebuilt binaries
-#    being compiled for a different Node.js version.
+#    This compiles node-av against the newly installed FFmpeg 7.x libraries.
 echo ""
 echo "[2/4] Rebuilding native Node.js addons from source..."
 npm rebuild --build-from-source
