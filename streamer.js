@@ -5,7 +5,7 @@ import WebSocket from 'ws';
 global.WebSocket = WebSocket;
 
 import { Client } from 'discord.js-selfbot-v13';
-import { Streamer, prepareStream, playStream } from '@dank074/discord-video-stream';
+import { Streamer, Encoders, playStream } from '@dank074/discord-video-stream';
 import path from 'path';
 import fs from 'fs';
 
@@ -45,36 +45,24 @@ client.on('ready', async () => {
         const streamer = new Streamer(client);
         await streamer.joinVoice(guildId, channelId);
         
-        console.log(`[Streamer] Connected! Initializing high-quality FFmpeg stream for: ${path.basename(moviePath)}`);
+        console.log(`[Streamer] Connected! Creating Stream Connection...`);
+        const udp = await streamer.createStream();
         
-        // Tuned for absolute best 720p 60fps H264 quality
-        const { command, output } = prepareStream(moviePath, {
-            videoCodec: 'H264',
-            width: 1280,
-            height: 720,
-            frameRate: 60,
-            bitrateVideo: 3500, // 3500 kbps (3.5 Mbps)
-            includeAudio: true
-        });
-
-        command.on('error', (err) => {
-            console.error("[Streamer] FFmpeg rendering pipeline crashed:", err);
-            process.exit(1);
-        });
-
-        command.on('stderr', (line) => {
-            console.warn(`[FFmpeg Stderr] ${line}`);
-        });
-
-        command.on('end', () => {
-            console.log("[Streamer] Movie playback completed successfully. Exiting...");
-            process.exit(0);
-        });
+        // Prepare speaking/video states
+        udp.mediaConnection.setSpeaking(true);
+        udp.mediaConnection.setVideoStatus(true);
         
-        // Start streaming
-        await playStream(output, streamer);
+        console.log(`[Streamer] Connected! Initializing stream for: ${path.basename(moviePath)}`);
+        
+        // Play local file using software x264 encoder
+        await playStream(moviePath, udp, Encoders.software({
+            x264: {
+                preset: 'faster', // Balanced preset for high quality and minimal VPS load
+            }
+        }));
 
-        console.log("[Streamer] 🎥 Stream is now live inside voice channel! Press stop/disconnect command to exit.");
+        console.log("[Streamer] Movie playback completed successfully. Exiting...");
+        process.exit(0);
         
     } catch (err) {
         console.error("[Streamer] Failed to join or stream to channel:", err);
