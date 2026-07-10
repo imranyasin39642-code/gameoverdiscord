@@ -4,6 +4,15 @@
  * Uses discord.js-selfbot-v13 & discord-video-stream packages.
  */
 
+// Polyfill global File object for Node 18.x / undici compatibility
+if (typeof global.File === 'undefined') {
+    try {
+        global.File = require('buffer').File;
+    } catch (e) {
+        console.warn("[Streamer] Warning: Failed to polyfill global File object.");
+    }
+}
+
 const { Client } = require('discord.js-selfbot-v13');
 const { StreamConnection, playStream } = require('@dank074/discord-video-stream');
 const path = require('path');
