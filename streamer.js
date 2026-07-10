@@ -16,9 +16,8 @@ global.WebSocket = ws;
 
 // ─── Core imports ─────────────────────────────────────────────────────────────
 import { Client } from 'discord.js-selfbot-v13';
-import { Streamer, Utils } from '@dank074/discord-video-stream';
+import { Streamer, playStream } from '@dank074/discord-video-stream';
 import { spawn } from 'child_process';
-import { PassThrough } from 'stream';
 import path from 'path';
 import fs from 'fs';
 
@@ -122,14 +121,16 @@ client.on('ready', async () => {
             setTimeout(() => process.exit(0), 500);
         });
 
-        // 4. Pipe FFmpeg stdout (NUT stream) directly into the library's udp stream.
-        //    Utils.demuxProbe reads the NUT container and sends H264/Opus packets.
+        // 4. Pipe our own FFmpeg stdout (NUT-muxed H264+Opus) directly to playStream.
+        //    playStream() accepts any Readable stream — it parses NUT internally.
+        //    This skips node-av entirely (which crashes on this VPS).
         console.log(`[Streamer] Piping stream: ${path.basename(MOVIE_PATH)}`);
 
-        await Utils.demuxProbe(ffmpeg.stdout).then(async (info) => {
-            console.log(`[Streamer] Demux probe OK — video=${info.video} audio=${info.audio}`);
-            await Utils.playStream(info, udp, { highWaterMark: 1024 * 1024 });
+        await playStream(ffmpeg.stdout, streamer, {
+            type: 'go-live',
         });
+
+        console.log('[Streamer] playStream resolved — waiting for FFmpeg to finish.');
 
         console.log('[Streamer] Playback complete. Exiting.');
         process.exit(0);
