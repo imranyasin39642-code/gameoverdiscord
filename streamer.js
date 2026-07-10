@@ -1,22 +1,18 @@
-/**
- * 🎥 Discord Live Cinema — Node.js Stream Worker
- * Negotiates WebRTC voice/video connection and pipes FFmpeg streaming output.
- * Uses discord.js-selfbot-v13 & discord-video-stream packages.
- */
+import { Buffer } from 'buffer';
 
 // Polyfill global File object for Node 18.x / undici compatibility
 if (typeof global.File === 'undefined') {
     try {
-        global.File = require('buffer').File;
+        global.File = Buffer.File;
     } catch (e) {
         console.warn("[Streamer] Warning: Failed to polyfill global File object.");
     }
 }
 
-const { Client } = require('discord.js-selfbot-v13');
-const { StreamConnection, playStream } = require('@dank074/discord-video-stream');
-const path = require('path');
-const fs = require('fs');
+import { Client } from 'discord.js-selfbot-v13';
+import { StreamConnection, playStream } from '@dank074/discord-video-stream';
+import path from 'path';
+import fs from 'fs';
 
 // Verify token presence
 const token = process.env.DISCORD_STREAMER_TOKEN;

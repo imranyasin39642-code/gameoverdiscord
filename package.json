@@ -1,6 +1,7 @@
 {
   "name": "discord-live-cinema-streamer",
   "version": "1.0.0",
+  "type": "module",
   "description": "High-performance screensharing VOD player for Discord VC",
   "main": "streamer.js",
   "scripts": {
