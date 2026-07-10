@@ -1,13 +1,5 @@
-import { Buffer } from 'buffer';
-
-// Polyfill global File object for Node 18.x / undici compatibility
-if (typeof global.File === 'undefined') {
-    try {
-        global.File = Buffer.File;
-    } catch (e) {
-        console.warn("[Streamer] Warning: Failed to polyfill global File object.");
-    }
-}
+import { File } from 'node:buffer';
+global.File = File;
 
 import { Client } from 'discord.js-selfbot-v13';
 import { StreamConnection, playStream } from '@dank074/discord-video-stream';
