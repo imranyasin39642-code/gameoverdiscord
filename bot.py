@@ -311,8 +311,20 @@ async def play_cinema(ctx: commands.Context, query: str):
     status_msg = await ctx.send(f"🔍 **Searching MovieBox VOD Database for:** `{search_query}`...")
     
     try:
-        # Search VOD
-        items = await search_vod(search_query, language="hi") # Default to Hindi first
+        # Search VOD - try Hindi first and verify, otherwise fall back to English/Original
+        items = await search_vod(search_query, language="hi")
+        has_hindi = False
+        if items:
+            top_item = items[0]
+            if "hindi" in top_item.title.lower():
+                has_hindi = True
+                
+        if not has_hindi:
+            print(f"[Bot VOD Search] Hindi version not found or verified for '{search_query}'. Trying English/Original...")
+            en_items = await search_vod(search_query, language="en")
+            if en_items:
+                items = en_items
+                
         if not items:
             await status_msg.edit(content=f"❌ **No results found for:** `{search_query}`")
             return
