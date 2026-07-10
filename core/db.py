@@ -1,7 +1,11 @@
+import os
 import sqlite3
 import time
 
-DB_FILE = "gameover_discord_db.sqlite3"
+_parent_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_tg_bot_folder = "gameoverbotmusic" if os.path.exists(os.path.join(_parent_dir, "gameoverbotmusic")) else "Music bot"
+DB_FILE = os.path.abspath(os.path.join(_parent_dir, _tg_bot_folder, "gameover_db.sqlite3"))
+print(f"[DB] Using unified database file at: {DB_FILE}")
 
 def get_db():
     conn = sqlite3.connect(DB_FILE)

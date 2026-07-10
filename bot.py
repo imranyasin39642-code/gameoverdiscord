@@ -27,7 +27,7 @@ active_streams = {}
 
 # ─── Shared Scraper & Downloader Imports ─────────────────────────────────────
 try:
-    from core.vod_scraper import Session, search_vod, resolve_stream_link
+    from core.vod_scraper import Session, search_vod, resolve_stream_link, fetch_tv_details, SubjectType
     from core.downloader import download_song
     from core.queue_manager import SongInfo
 except ImportError as imp_err:
@@ -110,6 +110,8 @@ async def on_ready():
         
     if not auto_disconnect_check.is_running():
         auto_disconnect_check.start()
+    if not auto_cleanup_cache_files.is_running():
+        auto_cleanup_cache_files.start()
 
 
 @bot.event
@@ -151,6 +153,37 @@ async def auto_disconnect_check():
             await kill_process_tree(stream_info["process"])
 
 
+@tasks.loop(minutes=30)
+async def auto_cleanup_cache_files():
+    """Scans the shared downloads directory and deletes cached video files older than 24 hours."""
+    downloads_dir = config.Config.DOWNLOADS_DIR
+    if not downloads_dir or not os.path.exists(downloads_dir):
+        return
+        
+    print(f"[Garbage Collector] Scanning cache directory: {downloads_dir}")
+    now = time.time()
+    deleted_count = 0
+    
+    try:
+        for filename in os.listdir(downloads_dir):
+            if filename.endswith(".mp4") or filename.endswith(".mkv"):
+                filepath = os.path.join(downloads_dir, filename)
+                mtime = os.path.getmtime(filepath)
+                age_seconds = now - mtime
+                if age_seconds > 86400:
+                    try:
+                        os.remove(filepath)
+                        deleted_count += 1
+                        print(f"[Garbage Collector] Deleted expired cache file: {filename} (Age: {age_seconds/3600:.1f} hours)")
+                    except Exception as remove_err:
+                        print(f"[Garbage Collector] Failed to delete {filename}: {remove_err}")
+                        
+        if deleted_count > 0:
+            print(f"[Garbage Collector] Successfully cleaned up {deleted_count} expired video file(s).")
+    except Exception as scan_err:
+        print(f"[Garbage Collector] Error scanning directory: {scan_err}")
+
+
 # ─── Resume Playback Interactive UI View ──────────────────────────────────────
 class ResumePromptView(discord.ui.View):
     def __init__(self, author_id: int, on_resume, on_startover):
@@ -176,6 +209,79 @@ class ResumePromptView(discord.ui.View):
         self.stop()
         await interaction.response.defer()
         await self.on_startover(interaction)
+
+
+# ─── Season Selection View ────────────────────────────────────────────────────
+class SeasonSelectionView(discord.ui.View):
+    def __init__(self, author_id: int, title: str, seasons: list, on_season_selected):
+        super().__init__(timeout=120.0)
+        self.author_id = author_id
+        self.title = title
+        self.seasons = seasons
+        self.on_season_selected = on_season_selected
+
+        for s in seasons[:25]:
+            button = discord.ui.Button(
+                label=f"Season {s.se}",
+                style=discord.ButtonStyle.green,
+                custom_id=f"season_{s.se}"
+            )
+            button.callback = self.make_callback(s.se)
+            self.add_item(button)
+
+    def make_callback(self, season_num: int):
+        async def callback(interaction: discord.Interaction):
+            if interaction.user.id != self.author_id:
+                await interaction.response.send_message("⚠️ Only the requester can select seasons!", ephemeral=True)
+                return
+            self.stop()
+            await interaction.response.defer()
+            await self.on_season_selected(interaction, season_num)
+        return callback
+
+
+# ─── Episode Selection View ───────────────────────────────────────────────────
+class EpisodeSelectionView(discord.ui.View):
+    def __init__(self, author_id: int, title: str, season_num: int, max_episodes: int, on_episode_selected, on_back):
+        super().__init__(timeout=120.0)
+        self.author_id = author_id
+        self.title = title
+        self.season_num = season_num
+        self.max_episodes = max_episodes
+        self.on_episode_selected = on_episode_selected
+        self.on_back = on_back
+
+        if max_episodes > 0:
+            select = discord.ui.Select(
+                placeholder=f"Select Episode (1-{min(max_episodes, 25)})...",
+                options=[
+                    discord.SelectOption(label=f"Episode {ep}", value=str(ep), description=f"Play Season {season_num} Episode {ep}")
+                    for ep in range(1, min(max_episodes, 25) + 1)
+                ]
+            )
+            select.callback = self.select_callback
+            self.add_item(select)
+
+        back_btn = discord.ui.Button(label="◀️ Back to Seasons", style=discord.ButtonStyle.red, row=1 if max_episodes > 0 else 0)
+        back_btn.callback = self.back_callback
+        self.add_item(back_btn)
+
+    async def select_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("⚠️ Only the requester can select episodes!", ephemeral=True)
+            return
+        self.stop()
+        await interaction.response.defer()
+        selected_ep = int(interaction.data["values"][0])
+        await self.on_episode_selected(interaction, selected_ep)
+
+    async def back_callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message("⚠️ Only the requester can navigate!", ephemeral=True)
+            return
+        self.stop()
+        await interaction.response.defer()
+        await self.on_back(interaction)
 
 
 # ─── Bot Commands ─────────────────────────────────────────────────────────────
@@ -214,6 +320,9 @@ async def play_cinema(ctx: commands.Context, query: str):
         current_item = items[0]
         subject_id = int(current_item.subjectId)
         clean_title = current_item.title.replace("[Hindi]", "").replace("[English]", "").strip()
+        
+        # Check if TV Series
+        is_series = current_item.subjectType == SubjectType.TV_SERIES or int(getattr(current_item, "subjectType", 1)) == 2
         
         # Check if saved progress exists in database
         saved_progress = get_vod_progress(guild_id, subject_id, season, episode)
@@ -308,6 +417,69 @@ async def play_cinema(ctx: commands.Context, query: str):
             except Exception as play_err:
                 print(f"[Bot Play] Playback setup crashed: {play_err}")
                 await target_msg.edit(content=f"❌ **Error playing movie:** {play_err}")
+
+        # If TV Show, present Seasons and Episodes Selection View
+        if is_series and season == 0 and episode == 0:
+            session = Session()
+            details = await fetch_tv_details(session, current_item)
+            if not details or not details.resource or not details.resource.seasons:
+                await status_msg.edit(content=f"❌ **Failed to fetch TV details for:** `{clean_title}`")
+                return
+            
+            seasons = details.resource.seasons
+            
+            async def on_season_selected(interaction: discord.Interaction, chosen_season: int):
+                max_ep = 1
+                for s in seasons:
+                    if s.se == chosen_season:
+                        max_ep = s.maxEp
+                        break
+                
+                async def on_episode_selected(ep_interaction: discord.Interaction, chosen_episode: int):
+                    nonlocal season, episode
+                    season = chosen_season
+                    episode = chosen_episode
+                    
+                    ep_saved_progress = get_vod_progress(guild_id, subject_id, chosen_season, chosen_episode)
+                    if ep_saved_progress and ep_saved_progress > 10:
+                        from plugins.controls import format_seconds
+                        pos_str = format_seconds(ep_saved_progress)
+                        display_title = f"{clean_title} S{chosen_season}E{chosen_episode}"
+                        
+                        async def on_resume(resume_interaction):
+                            await start_playback(resume_interaction, force_seek_secs=ep_saved_progress)
+                            
+                        async def on_startover(startover_interaction):
+                            clear_vod_progress(guild_id, subject_id, chosen_season, chosen_episode)
+                            await start_playback(startover_interaction, force_seek_secs=0)
+                            
+                        view = ResumePromptView(ctx.author.id, on_resume, on_startover)
+                        await status_msg.edit(
+                            content=f"⚠️ **SAVED PROGRESS FOUND!**\n\n🎬 **Title:** `{display_title}`\n⏱ **Saved Position:** `{pos_str}`\n\nKya aap is position se **Resume** karna chahte hain ya shuru se **Start Over**?",
+                            view=view
+                        )
+                    else:
+                        await start_playback(ep_interaction, force_seek_secs=0)
+                
+                async def on_back(back_interaction):
+                    seasons_view = SeasonSelectionView(ctx.author.id, clean_title, seasons, on_season_selected)
+                    await status_msg.edit(
+                        content=f"📺 **{clean_title}** ke kul `{len(seasons)} seasons` hain.\n\nNeeche se watch karne ke liye **Season** select karein:",
+                        view=seasons_view
+                    )
+                
+                episodes_view = EpisodeSelectionView(ctx.author.id, clean_title, chosen_season, max_ep, on_episode_selected, on_back)
+                await status_msg.edit(
+                    content=f"📺 **{clean_title} — Season {chosen_season}**\n\nWatch karne ke liye **Episode** select karein:",
+                    view=episodes_view
+                )
+            
+            seasons_view = SeasonSelectionView(ctx.author.id, clean_title, seasons, on_season_selected)
+            await status_msg.edit(
+                content=f"📺 **{clean_title}** ke kul `{len(seasons)} seasons` hain.\n\nNeeche se watch karne ke liye **Season** select karein:",
+                view=seasons_view
+            )
+            return
 
         # Check if saved progress exists and prompt
         if saved_progress and saved_progress > 10:
