@@ -5,7 +5,7 @@
  */
 
 const { Client } = require('discord.js-selfbot-v13');
-const { StreamConnection, playStream } = require('discord-video-stream');
+const { StreamConnection, playStream } = require('@dank074/discord-video-stream');
 const path = require('path');
 const fs = require('fs');
 
