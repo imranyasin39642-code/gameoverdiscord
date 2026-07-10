@@ -12,10 +12,12 @@ class Config:
     STREAMER_TOKEN: str = os.getenv("DISCORD_STREAMER_TOKEN", "YOUR_STREAMER_TOKEN_HERE")
 
     # Shared downloads cache folder pointing to the Telegram bot downloads folder
+    _parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _tg_bot_folder = "gameoverbotmusic" if os.path.exists(os.path.join(_parent_dir, "gameoverbotmusic")) else "Music bot"
     DOWNLOADS_DIR: str = os.path.abspath(
         os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "Music bot",
+            _parent_dir,
+            _tg_bot_folder,
             "downloads"
         )
     )

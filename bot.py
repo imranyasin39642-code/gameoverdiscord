@@ -6,8 +6,11 @@ import re
 import discord
 from discord.ext import commands, tasks
 
-# Inject parent path to import Music Bot core modules
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Music bot"))
+# Inject parent path dynamically to resolve both local Windows ("Music bot") and VPS ("gameoverbotmusic") directories
+_parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_tg_bot_folder = "gameoverbotmusic" if os.path.exists(os.path.join(_parent_dir, "gameoverbotmusic")) else "Music bot"
+sys.path.append(os.path.join(_parent_dir, _tg_bot_folder))
+print(f"[Bot] Resolved and appended Music Bot core library path: {os.path.join(_parent_dir, _tg_bot_folder)}")
 
 # Import configurations
 import config
