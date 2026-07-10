@@ -2,7 +2,7 @@ import { File } from 'node:buffer';
 global.File = File;
 
 import { Client } from 'discord.js-selfbot-v13';
-import { StreamConnection, playStream } from '@dank074/discord-video-stream';
+import { Streamer, prepareStream, playStream } from '@dank074/discord-video-stream';
 import path from 'path';
 import fs from 'fs';
 
@@ -38,43 +38,34 @@ client.on('ready', async () => {
     try {
         console.log(`[Streamer] Attempting to connect to Guild: ${guildId}, Voice Channel: ${channelId}...`);
         
-        // Initialize Stream Connection
-        const streamConnection = new StreamConnection(client, guildId, channelId);
-        await streamConnection.connect();
+        // Initialize Streamer
+        const streamer = new Streamer(client);
+        await streamer.joinVoice(guildId, channelId);
         
         console.log(`[Streamer] Connected! Initializing high-quality FFmpeg stream for: ${path.basename(moviePath)}`);
         
-        // Tuned for absolute best 720p 60fps VP8 quality for a 6-Core beast VPS
-        const streamPlay = await playStream(moviePath, streamConnection, {
-            ffmpegPath: 'ffmpeg',
+        // Tuned for absolute best 720p 60fps VP8 quality
+        const { command, output } = prepareStream(moviePath, {
             videoCodec: 'VP8',
             width: 1280,
             height: 720,
-            fps: 60,
-            bitrate: 3500000, // 3.5 Mbps Video Bitrate (crystal-clear 720p)
-            ffmpegVideoFlags: [
-                '-deadline', 'good',  // High-quality encoding pass (not fast/realtime, VPS can easily afford)
-                '-cpu-used', '2',     // Devotes more VPS compression cycles for pristine frames
-                '-crf', '12',         // Constant Rate Factor range (Lower = higher quality, 12 is near-lossless)
-                '-g', '120'           // Keyframe interval for stable playback streaming
-            ],
-            ffmpegAudioFlags: [
-                '-acodec', 'libopus',
-                '-b:a', '192k',       // 192kbps High Fidelity audio
-                '-ar', '48000',
-                '-ac', '2'
-            ]
+            frameRate: 60,
+            bitrateVideo: 3500, // 3500 kbps (3.5 Mbps)
+            includeAudio: true
         });
 
-        streamPlay.on('finish', () => {
-            console.log("[Streamer] Movie playback completed successfully. Exiting...");
-            process.exit(0);
-        });
-
-        streamPlay.on('error', (err) => {
+        command.on('error', (err) => {
             console.error("[Streamer] FFmpeg rendering pipeline crashed:", err);
             process.exit(1);
         });
+
+        command.on('end', () => {
+            console.log("[Streamer] Movie playback completed successfully. Exiting...");
+            process.exit(0);
+        });
+        
+        // Start streaming
+        await playStream(output, streamer);
 
         console.log("[Streamer] 🎥 Stream is now live inside voice channel! Press stop/disconnect command to exit.");
         
