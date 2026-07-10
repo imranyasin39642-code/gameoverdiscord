@@ -5,7 +5,7 @@ import WebSocket from 'ws';
 global.WebSocket = WebSocket;
 
 import { Client } from 'discord.js-selfbot-v13';
-import { Streamer, Encoders, playStream } from '@dank074/discord-video-stream';
+import { Streamer, prepareStream, playStream } from '@dank074/discord-video-stream';
 import path from 'path';
 import fs from 'fs';
 
@@ -16,9 +16,7 @@ if (!token) {
     process.exit(1);
 }
 
-const client = new Client({
-    checkUpdate: false
-});
+const client = new Client({ checkUpdate: false });
 
 // Read CLI parameters
 const guildId = process.argv[2];
@@ -37,33 +35,56 @@ if (!fs.existsSync(moviePath)) {
 
 client.on('ready', async () => {
     console.log(`[Streamer] Logged in successfully as user client: ${client.user.tag}`);
-    
+
     try {
         console.log(`[Streamer] Attempting to connect to Guild: ${guildId}, Voice Channel: ${channelId}...`);
-        
-        // Initialize Streamer
+
         const streamer = new Streamer(client);
         await streamer.joinVoice(guildId, channelId);
-        
-        console.log(`[Streamer] Connected! Creating Stream Connection...`);
-        const udp = await streamer.createStream();
-        
-        // Prepare speaking/video states
-        udp.mediaConnection.setSpeaking(true);
-        udp.mediaConnection.setVideoStatus(true);
-        
-        console.log(`[Streamer] Connected! Initializing stream for: ${path.basename(moviePath)}`);
-        
-        // Play local file using software x264 encoder
-        await playStream(moviePath, udp, Encoders.software({
-            x264: {
-                preset: 'faster', // Balanced preset for high quality and minimal VPS load
-            }
-        }));
+
+        console.log(`[Streamer] Connected! Preparing FFmpeg pipeline for: ${path.basename(moviePath)}`);
+
+        // Use prepareStream so FFmpeg itself handles decoding the local file.
+        // This bypasses the broken node-av internal demuxer path and runs ffmpeg
+        // directly, ensuring video frames are actually produced.
+        const { command, output } = prepareStream(moviePath, {
+            videoCodec: 'H264',
+            width: 1280,
+            height: 720,
+            frameRate: 30,
+            bitrateVideo: 3000,   // 3000 kbps
+            includeAudio: true,
+            // Force pixel format and read at native rate via ffmpegOptions
+            ffmpegOptions: [
+                '-re',            // Read input at native framerate (prevents frame=0 stall)
+                '-pix_fmt', 'yuv420p',  // Force yuv420p for H264 compatibility
+            ]
+        });
+
+        command.on('stderr', (line) => {
+            console.warn(`[FFmpeg] ${line}`);
+        });
+
+        command.on('error', (err) => {
+            console.error("[Streamer] FFmpeg pipeline crashed:", err.message);
+            process.exit(1);
+        });
+
+        command.on('end', () => {
+            console.log("[Streamer] FFmpeg pipeline finished.");
+        });
+
+        console.log(`[Streamer] Streaming now: ${path.basename(moviePath)}`);
+
+        // playStream sends the FFmpeg-piped output to the Discord voice channel.
+        // 'streamer' is the Streamer instance (not udp).
+        await playStream(output, streamer, {
+            type: 'go-live',
+        });
 
         console.log("[Streamer] Movie playback completed successfully. Exiting...");
         process.exit(0);
-        
+
     } catch (err) {
         console.error("[Streamer] Failed to join or stream to channel:", err);
         process.exit(1);
