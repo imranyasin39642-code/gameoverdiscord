@@ -47,9 +47,9 @@ client.on('ready', async () => {
         
         console.log(`[Streamer] Connected! Initializing high-quality FFmpeg stream for: ${path.basename(moviePath)}`);
         
-        // Tuned for absolute best 720p 60fps VP8 quality
+        // Tuned for absolute best 720p 60fps H264 quality
         const { command, output } = prepareStream(moviePath, {
-            videoCodec: 'VP8',
+            videoCodec: 'H264',
             width: 1280,
             height: 720,
             frameRate: 60,
