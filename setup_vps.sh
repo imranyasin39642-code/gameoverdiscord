@@ -10,14 +10,25 @@ echo "==================================================="
 
 cd /root/gameoverdiscord
 
-# 1. Ensure build tools and FFmpeg 7.x dev libraries are installed
+# 1. Purge FFmpeg 7.x PPA and install standard Ubuntu repository FFmpeg dev libraries.
+#    FFmpeg 7.x hides internal headers like libavformat/url.h, breaking node-av compilation.
+#    Reverting to the default Ubuntu repository version fixes this compatibility.
 echo ""
-echo "[1/4] Installing build dependencies and FFmpeg 7.x dev libraries..."
-apt-get update -qq
+echo "[1/4] Downgrading to standard Ubuntu FFmpeg libraries..."
 apt-get install -y -qq software-properties-common
-add-apt-repository -y ppa:ubuntuhandbook1/ffmpeg7
+
+# Purge PPA and existing FFmpeg 7 packages to avoid conflicts
+apt-get purge -y ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswresample-dev libswscale-dev libavdevice-dev libpostproc-dev || true
+apt-get autoremove -y -qq || true
+
+if apt-cache policy | grep -q "ffmpeg7"; then
+  add-apt-repository --remove -y ppa:ubuntuhandbook1/ffmpeg7 || true
+fi
 apt-get update -qq
+
+# Install standard stable repository FFmpeg and headers
 apt-get install -y -qq build-essential python3 make g++ ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswresample-dev libswscale-dev libavdevice-dev libpostproc-dev
+
 
 # 2. Rebuild node-av from source.
 #    Since node-av npm packages omit binding.gyp (prebuilt only), we must download
@@ -53,7 +64,7 @@ else
   mv node-av-src node_modules/node-av
   rm -f node-av.tar.gz
   
-  echo "Compiling node-av against system FFmpeg 7 libraries..."
+  echo "Compiling node-av against system FFmpeg libraries..."
   npm rebuild node-av --build-from-source
 fi
 echo "✓ Native modules rebuilt."
