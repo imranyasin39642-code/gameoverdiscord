@@ -23,6 +23,7 @@ apt-get install -y -qq build-essential python3 make g++ ffmpeg libavcodec-dev li
 #    This compiles node-av against the newly installed FFmpeg 7.x libraries.
 echo ""
 echo "[2/4] Rebuilding native Node.js addons from source..."
+npm install -g node-gyp
 npm rebuild --build-from-source
 echo "✓ Native modules rebuilt."
 
