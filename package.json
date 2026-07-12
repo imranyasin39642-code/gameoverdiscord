@@ -1,7 +1,6 @@
 {
   "name": "discord-live-cinema-streamer",
   "version": "1.0.0",
-  "type": "module",
   "description": "High-performance screensharing VOD player for Discord VC",
   "main": "streamer.js",
   "scripts": {
@@ -9,8 +8,9 @@
   },
   "dependencies": {
     "discord.js-selfbot-v13": "^3.7.1",
-    "@dank074/discord-video-stream": "5.1.0",
-    "dotenv": "^16.3.1"
+    "discord-stream-client": "latest",
+    "dotenv": "^16.3.1",
+    "ws": "^8.0.0"
   },
   "author": "Antigravity Dev",
   "license": "MIT"

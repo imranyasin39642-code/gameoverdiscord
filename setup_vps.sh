@@ -1,48 +1,47 @@
 #!/bin/bash
-# setup_vps.sh — Run this ONCE on VPS to fix node-av native module
+# setup_vps.sh — Run this ONCE on VPS
+# Installs system ffmpeg + does clean npm install (prebuilt binaries only, NO compilation)
 # Usage: bash setup_vps.sh
 
 set -e
 
 echo "==================================================="
-echo "  Discord Live Cinema — VPS Setup & Repair Script"
+echo "  Discord Live Cinema — VPS Setup Script"
+echo "  (Zero native C++ compilation required)"
 echo "==================================================="
 
 cd /root/gameoverdiscord
 
-# 1. Purge FFmpeg 7.x PPA and install standard system FFmpeg
+# ── Step 1: Install system FFmpeg (binary, no dev headers needed) ─────────────
 echo ""
-echo "[1/3] Restoring system FFmpeg..."
-apt-get install -y -qq software-properties-common
-
-# Purge PPA and existing FFmpeg 7 packages to avoid conflicts
-apt-get purge -y ffmpeg libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libswresample-dev libswscale-dev libavdevice-dev libpostproc-dev || true
-apt-get autoremove -y -qq || true
-
-if apt-cache policy | grep -q "ffmpeg7"; then
-  add-apt-repository --remove -y ppa:ubuntuhandbook1/ffmpeg7 || true
-fi
+echo "[1/3] Installing system FFmpeg..."
 apt-get update -qq
-
-# Install standard stable repository FFmpeg
 apt-get install -y -qq ffmpeg
+ffmpeg -version | head -n 1
+echo "✓ FFmpeg installed."
 
-# 2. Clean install npm dependencies using prebuilt binaries (NO compilation from source)
+# ── Step 2: Clean npm install (downloads prebuilt binaries, NO build-from-source) ──
 echo ""
-echo "[2/3] Cleaning node_modules and running clean npm install..."
+echo "[2/3] Running clean npm install (prebuilt binaries only)..."
 rm -rf node_modules package-lock.json
 npm cache clean --force
 npm install
+echo "✓ npm install complete."
 
-# 3. Verify node-av loads correctly
+# ── Step 3: Verify discord-stream-client loads ────────────────────────────────
 echo ""
-echo "[3/3] Verifying node-av loads..."
+echo "[3/3] Verifying discord-stream-client loads correctly..."
 node -e "
 try {
-  const av = require('node-av');
-  console.log('✓ node-av loaded successfully.');
-} catch(e) {
-  console.error('✗ node-av failed to load:', e.message);
+  const m = require('discord-stream-client');
+  if (m.DiscordStreamClient) {
+    console.log('✓ discord-stream-client loaded — DiscordStreamClient class found.');
+  } else {
+    console.error('✗ discord-stream-client loaded but DiscordStreamClient class missing.');
+    process.exit(1);
+  }
+} catch (e) {
+  console.error('✗ discord-stream-client failed to load:', e.message);
   process.exit(1);
 }
 "
