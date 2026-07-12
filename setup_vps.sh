@@ -43,6 +43,14 @@ npm cache clean --force
 npm install --prefer-offline 2>/dev/null || npm install
 echo "  ✓ npm install complete."
 
+# ── Step 3.5: Ensure voice encryption modules are present ─────────────────────
+# discord-stream-client requires at least ONE of: sodium, libsodium-wrappers, tweetnacl
+# Without these it throws MISSING_ENCRYPTION_MODULE at require-time.
+echo ""
+echo "[3.5] Installing voice encryption modules (libsodium-wrappers + tweetnacl)..."
+npm install libsodium-wrappers@latest tweetnacl@latest
+echo "  ✓ Encryption modules installed."
+
 # ── Step 4: Verify discord-stream-client loads ────────────────────────────────
 echo ""
 echo "[4/4] Verifying discord-stream-client loads correctly..."
